@@ -50,59 +50,142 @@ public class OutboxPollingService {
     @Scheduled(fixedRate = 5000)
     @Transactional
     public void pollOutboxTable() {
-        List<OutboxEntry> entries = entityManager.createQuery("SELECT o FROM OutboxEntry o WHERE o.status = 'PENDING'", OutboxEntry.class)
-                .getResultList();
-
-        for (OutboxEntry entry : entries) {
-            try {
-                TextMapPropagator propagator = openTelemetry.getPropagators().getTextMapPropagator();
-                Context parentContext = propagator.extract(Context.current(), entry.getTraceparent(), new TextMapGetter<String>() {
-                    @Override
-                    public Iterable<String> keys(String carrier) {
-                        return List.of("traceparent");
-                    }
-
-                    @Override
-                    public String get(String carrier, String key) {
-                        return carrier;
-                    }
-                });
-
-                Span span = tracer.spanBuilder("OutboxProcessing")
-                        .setParent(parentContext)
-                        .startSpan();
-
-                try (var scope = span.makeCurrent()) {
-                    rabbitTemplate.convertAndSend("outboxQueue", entry.getMovieJson());
-                    entry.setStatus("PROCESSED");
-                    entityManager.merge(entry);
-                    processedEvents.incrementAndGet();
-                } catch (Exception e) {
-                    span.recordException(e);
-                    int retryCount = entry.getRetryCount() + 1;
-                    entry.setRetryCount(retryCount);
-
-                    if (retryCount > retryLimit) {
-                        entry.setStatus("FAILED");
-                        failedEvents.incrementAndGet();
-                    }
-
-                    entityManager.merge(entry);
-                    e.printStackTrace();
-                } finally {
-                    span.end();
-                }
-            } catch (Exception e) {
-                int retryCount = entry.getRetryCount() + 1;
-                entry.setRetryCount(retryCount);
-
-                if (retryCount > retryLimit) {
-                    entry.setStatus("FAILED");
-                }
-
-                entityManager.merge(entry);
-                e.printStackTrace();
+        Span pollSpan = tracer.spanBuilder("OutboxPollTable")
+                .startSpan();
+        
+        try (var pollScope = pollSpan.makeCurrent()) {
+            pollSpan.setAttribute("polling.interval.ms", 5000);
+            
+            // Fetch pending entries span
+            Span fetchSpan = tracer.spanBuilder("FetchPendingEntries")
+                    .startSpan();
+            List<OutboxEntry> entries;
+            
+            try (var fetchScope = fetchSpan.makeCurrent()) {
+                String query = "SELECT o FROM OutboxEntry o WHERE o.status = 'PENDING'";
+                fetchSpan.setAttribute("query", query);
+                entries = entityManager.createQuery(query, OutboxEntry.class)
+                        .getResultList();
+                fetchSpan.setAttribute("entries.count", entries.size());
+            } finally {
+                fetchSpan.end();
             }
+            
+            pollSpan.setAttribute("entries.total", entries.size());
+
+            for (OutboxEntry entry : entries) {
+                try {
+                    // Context propagation span
+                    Span extractSpan = tracer.spanBuilder("ExtractTraceContext")
+                            .startSpan();
+                    
+                    Context parentContext;
+                    try (var extractScope = extractSpan.makeCurrent()) {
+                        TextMapPropagator propagator = openTelemetry.getPropagators().getTextMapPropagator();
+                        extractSpan.setAttribute("traceparent", entry.getTraceparent());
+                        
+                        parentContext = propagator.extract(Context.current(), entry.getTraceparent(), new TextMapGetter<String>() {
+                            @Override
+                            public Iterable<String> keys(String carrier) {
+                                return List.of("traceparent");
+                            }
+
+                            @Override
+                            public String get(String carrier, String key) {
+                                return carrier;
+                            }
+                        });
+                    } finally {
+                        extractSpan.end();
+                    }
+
+                    Span entrySpan = tracer.spanBuilder("ProcessOutboxEntry")
+                            .setParent(parentContext)
+                            .startSpan();
+
+                    try (var entryScope = entrySpan.makeCurrent()) {
+                        entrySpan.setAttribute("entry.id", entry.getId());
+                        entrySpan.setAttribute("entry.retryCount", entry.getRetryCount());
+                        
+                        // Send to RabbitMQ span
+                        Span sendSpan = tracer.spanBuilder("SendToRabbitMQ")
+                                .startSpan();
+                        try (var sendScope = sendSpan.makeCurrent()) {
+                            sendSpan.setAttribute("queue", "outbox");
+                            rabbitTemplate.convertAndSend("outbox", entry.getMovieJson());
+                        } finally {
+                            sendSpan.end();
+                        }
+                        
+                        // Update entry status span
+                        Span updateSpan = tracer.spanBuilder("UpdateEntryStatus")
+                                .startSpan();
+                        try (var updateScope = updateSpan.makeCurrent()) {
+                            updateSpan.setAttribute("status.new", "PROCESSED");
+                            entry.setStatus("PROCESSED");
+                            entityManager.merge(entry);
+                            processedEvents.incrementAndGet();
+                            updateSpan.setAttribute("processed.count", processedEvents.get());
+                        } finally {
+                            updateSpan.end();
+                        }
+                    } catch (Exception e) {
+                        entrySpan.recordException(e);
+                        
+                        // Handle retry span
+                        Span retrySpan = tracer.spanBuilder("HandleRetry")
+                                .startSpan();
+                        try (var retryScope = retrySpan.makeCurrent()) {
+                            int retryCount = entry.getRetryCount() + 1;
+                            retrySpan.setAttribute("retry.count", retryCount);
+                            retrySpan.setAttribute("retry.limit", retryLimit);
+                            entry.setRetryCount(retryCount);
+
+                            if (retryCount > retryLimit) {
+                                retrySpan.setAttribute("status.new", "FAILED");
+                                entry.setStatus("FAILED");
+                                failedEvents.incrementAndGet();
+                                retrySpan.setAttribute("failed.count", failedEvents.get());
+                            }
+
+                            entityManager.merge(entry);
+                        } finally {
+                            retrySpan.end();
+                        }
+                        
+                        e.printStackTrace();
+                    } finally {
+                        entrySpan.end();
+                    }
+                } catch (Exception e) {
+                    // Outer exception handling span
+                    Span errorSpan = tracer.spanBuilder("OutboxEntryError")
+                            .startSpan();
+                    try (var errorScope = errorSpan.makeCurrent()) {
+                        errorSpan.recordException(e);
+                        
+                        int retryCount = entry.getRetryCount() + 1;
+                        errorSpan.setAttribute("retry.count", retryCount);
+                        errorSpan.setAttribute("retry.limit", retryLimit);
+                        entry.setRetryCount(retryCount);
+
+                        if (retryCount > retryLimit) {
+                            errorSpan.setAttribute("status.new", "FAILED");
+                            entry.setStatus("FAILED");
+                            failedEvents.incrementAndGet();
+                            errorSpan.setAttribute("failed.count", failedEvents.get());
+                        }
+
+                        entityManager.merge(entry);
+                    } finally {
+                        errorSpan.end();
+                    }
+                    
+                    e.printStackTrace();
+                }
+            }
+        } finally {
+            pollSpan.end();
         }
     }
 }
