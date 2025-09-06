@@ -11,10 +11,12 @@ import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import java.util.List;
 
+import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.propagation.TextMapGetter;
+import io.opentelemetry.context.propagation.TextMapPropagator;
 
 @Service
 public class OutboxPollingService {
@@ -31,6 +33,9 @@ public class OutboxPollingService {
     @Autowired
     private Tracer tracer;
 
+    @Autowired
+    private OpenTelemetry openTelemetry;
+
     @Scheduled(fixedRate = 5000)
     @Transactional
     public void pollOutboxTable() {
@@ -39,7 +44,8 @@ public class OutboxPollingService {
 
         for (OutboxEntry entry : entries) {
             try {
-                Context parentContext = tracer.getPropagators().getTextMapPropagator().extract(Context.current(), entry.getTraceparent(), new TextMapGetter<String>() {
+                TextMapPropagator propagator = openTelemetry.getPropagators().getTextMapPropagator();
+                Context parentContext = propagator.extract(Context.current(), entry.getTraceparent(), new TextMapGetter<String>() {
                     @Override
                     public Iterable<String> keys(String carrier) {
                         return List.of("traceparent");
