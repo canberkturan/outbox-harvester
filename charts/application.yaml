@@ -28,10 +28,10 @@ management:
       endpoint: http://tempo.observability.svc.cluster.local:4318/v1/traces
 
 rabbitmq:
-  host: localhost
+  host: rabbitmq-headless.default.svc.cluster.local
   port: 5672
-  username: guest
-  password: guest
+  username: outbox
+  password: outbox
 
 outbox:
   retry:
