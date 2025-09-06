@@ -69,11 +69,6 @@
             <version>1.32.1-alpha</version>
         </dependency>
         <dependency>
-            <groupId>io.opentelemetry.instrumentation</groupId>
-            <artifactId>opentelemetry-spring-rabbitmq-2.7</artifactId>
-            <version>1.27.0</version>
-        </dependency>
-        <dependency>
             <groupId>net.ttddyy</groupId>
             <artifactId>datasource-proxy</artifactId>
             <version>1.9</version>
