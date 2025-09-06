@@ -39,6 +39,10 @@ management:
 outbox:
   retry:
     limit: 3
+  polling:
+    interval: 100  # Polling interval in milliseconds
+  batch:
+    size: 100       # Maximum number of entries to process in each batch
 
 opentelemetry:
   service:

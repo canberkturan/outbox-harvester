@@ -35,6 +35,12 @@ public class OutboxPollingService {
     @Value("${outbox.retry.limit:3}")
     private int retryLimit;
 
+    @Value("${outbox.polling.interval:5000}")
+    private long pollingIntervalMs;
+
+    @Value("${outbox.batch.size:100}")
+    private int batchSize;
+
     @Autowired
     private Tracer tracer;
 
@@ -47,14 +53,16 @@ public class OutboxPollingService {
         meterRegistry.gauge("outbox.events.failed", failedEvents);
     }
 
-    @Scheduled(fixedRate = 5000)
+    @Scheduled(fixedDelayString = "${outbox.polling.interval:5000}")
     @Transactional
     public void pollOutboxTable() {
         Span pollSpan = tracer.spanBuilder("OutboxPollTable")
                 .startSpan();
         
         try (var pollScope = pollSpan.makeCurrent()) {
-            pollSpan.setAttribute("polling.interval.ms", 5000);
+            pollSpan.setAttribute("polling.interval.ms", pollingIntervalMs);
+            pollSpan.setAttribute("batch.size", batchSize);
+            pollSpan.setAttribute("retry.limit", retryLimit);
             
             // Fetch pending entries span
             Span fetchSpan = tracer.spanBuilder("FetchPendingEntries")
@@ -64,7 +72,9 @@ public class OutboxPollingService {
             try (var fetchScope = fetchSpan.makeCurrent()) {
                 String query = "SELECT o FROM OutboxEntry o WHERE o.status = 'PENDING'";
                 fetchSpan.setAttribute("query", query);
+                fetchSpan.setAttribute("batch.size", batchSize);
                 entries = entityManager.createQuery(query, OutboxEntry.class)
+                        .setMaxResults(batchSize)
                         .getResultList();
                 fetchSpan.setAttribute("entries.count", entries.size());
             } finally {
