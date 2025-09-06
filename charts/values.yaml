@@ -2,7 +2,7 @@ replicaCount: 1
 image:
   registry: registry.k8s.ct
   repository: outbox-harvester
-  tag: master.20250906.7
+  tag: master.20250906.10
 resources:
   requests:
     cpu: 100m
