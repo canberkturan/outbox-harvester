@@ -37,6 +37,12 @@ spec:
               value: 'http://tempo.observability.svc.cluster.local:4318'
             - name: OTEL_SERVICE_NAME
               value: 'OutboxHarvester'
+            - name: SPRING_APPLICATION_NAME
+              value: 'OutboxHarvester'
+            - name: MANAGEMENT_OTLP_METRICS_EXPORT_STEP
+              value: '10s'
+            - name: MANAGEMENT_TRACING_SAMPLING_PROBABILITY
+              value: '1.0'
           volumeMounts:
             - name: config
               mountPath: /config

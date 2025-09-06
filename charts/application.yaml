@@ -1,4 +1,6 @@
 spring:
+  application:
+    name: OutboxHarvester
   datasource:
     url: jdbc:postgresql://postgres-postgresql-primary.db.svc.cluster.local:5432/appdb
     username: postgres
@@ -23,6 +25,8 @@ management:
   tracing:
     sampling:
       probability: 1.0
+    enabled: true
+    service-name: OutboxHarvester
   otlp:
     tracing:
       endpoint: http://tempo.observability.svc.cluster.local:4318/v1/traces
