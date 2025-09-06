@@ -1,4 +1,9 @@
 spring:
+  rabbitmq:
+    host: rabbitmq-headless.default.svc.cluster.local
+    port: 5672
+    username: outbox
+    password: outbox
   application:
     name: OutboxHarvester
   datasource:
@@ -30,12 +35,6 @@ management:
   otlp:
     tracing:
       endpoint: http://tempo.observability.svc.cluster.local:4318/v1/traces
-
-rabbitmq:
-  host: rabbitmq-headless.default.svc.cluster.local
-  port: 5672
-  username: outbox
-  password: outbox
 
 outbox:
   retry:

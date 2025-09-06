@@ -43,6 +43,14 @@ spec:
               value: '10s'
             - name: MANAGEMENT_TRACING_SAMPLING_PROBABILITY
               value: '1.0'
+            - name: SPRING_RABBITMQ_HOST
+              value: 'rabbitmq-headless.default.svc.cluster.local'
+            - name: SPRING_RABBITMQ_PORT
+              value: '5672'
+            - name: SPRING_RABBITMQ_USERNAME
+              value: 'outbox'
+            - name: SPRING_RABBITMQ_PASSWORD
+              value: 'outbox'
           volumeMounts:
             - name: config
               mountPath: /config
