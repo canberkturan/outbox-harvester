@@ -1,0 +1,38 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres-postgresql-primary.db.svc.cluster.local:5432/appdb
+    username: postgres
+    password: SuperSecretP4ss
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: http://tempo.observability.svc.cluster.local:4318/v1/traces
+
+rabbitmq:
+  host: localhost
+  port: 5672
+  username: guest
+  password: guest
+
+outbox:
+  retry:
+    limit: 3
