@@ -36,3 +36,7 @@ rabbitmq:
 outbox:
   retry:
     limit: 3
+
+opentelemetry:
+  service:
+    name: OutboxHarvester
