@@ -112,7 +112,13 @@ public class OutboxPollingService {
                                 .startSpan();
                         try (var sendScope = sendSpan.makeCurrent()) {
                             sendSpan.setAttribute("queue", "outbox");
-                            rabbitTemplate.convertAndSend("outbox", entry.getMovieJson());
+                            sendSpan.setAttribute("action", entry.getAction());
+                            
+                            // Create a message that includes both action and data
+                            String message = String.format("{\"action\":\"%s\",\"data\":%s}", 
+                                entry.getAction(), entry.getMovieJson());
+                                
+                            rabbitTemplate.convertAndSend("outbox", message);
                         } finally {
                             sendSpan.end();
                         }
