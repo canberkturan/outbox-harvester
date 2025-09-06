@@ -17,9 +17,14 @@ import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.propagation.TextMapGetter;
 import io.opentelemetry.context.propagation.TextMapPropagator;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class OutboxPollingService {
+
+    private final AtomicInteger processedEvents = new AtomicInteger(0);
+    private final AtomicInteger failedEvents = new AtomicInteger(0);
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -35,6 +40,12 @@ public class OutboxPollingService {
 
     @Autowired
     private OpenTelemetry openTelemetry;
+
+    @Autowired
+    public OutboxPollingService(MeterRegistry meterRegistry) {
+        meterRegistry.gauge("outbox.events.processed", processedEvents);
+        meterRegistry.gauge("outbox.events.failed", failedEvents);
+    }
 
     @Scheduled(fixedRate = 5000)
     @Transactional
@@ -65,6 +76,7 @@ public class OutboxPollingService {
                     rabbitTemplate.convertAndSend("outboxQueue", entry.getMovieJson());
                     entry.setStatus("PROCESSED");
                     entityManager.merge(entry);
+                    processedEvents.incrementAndGet();
                 } catch (Exception e) {
                     span.recordException(e);
                     int retryCount = entry.getRetryCount() + 1;
@@ -72,6 +84,7 @@ public class OutboxPollingService {
 
                     if (retryCount > retryLimit) {
                         entry.setStatus("FAILED");
+                        failedEvents.incrementAndGet();
                     }
 
                     entityManager.merge(entry);
