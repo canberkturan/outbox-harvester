@@ -35,6 +35,8 @@ spec:
               value: 'http/protobuf'
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: 'http://tempo.observability.svc.cluster.local:4318'
+            - name: OTEL_SERVICE_NAME
+              value: 'OutboxHarvester'
           volumeMounts:
             - name: config
               mountPath: /config
