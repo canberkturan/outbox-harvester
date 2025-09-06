@@ -104,7 +104,7 @@ public class OutboxPollingService {
                             .startSpan();
 
                     try (var entryScope = entrySpan.makeCurrent()) {
-                        entrySpan.setAttribute("entry.id", entry.getId());
+                        entrySpan.setAttribute("entry.id", entry.getOutboxId().toString());
                         entrySpan.setAttribute("entry.retryCount", entry.getRetryCount());
                         
                         // Send to RabbitMQ span
