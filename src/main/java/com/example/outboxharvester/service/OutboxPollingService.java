@@ -114,9 +114,9 @@ public class OutboxPollingService {
                             sendSpan.setAttribute("queue", "outbox");
                             sendSpan.setAttribute("action", entry.getAction());
                             
-                            // Create a message that includes both action and data
-                            String message = String.format("{\"action\":\"%s\",\"data\":%s}", 
-                                entry.getAction(), entry.getMovieJson());
+                            // Create a message that includes action, data, and traceparent
+                            String message = String.format("{\"action\":\"%s\",\"data\":%s,\"traceparent\":\"%s\"}", 
+                                entry.getAction(), entry.getMovieJson(), entry.getTraceparent());
                                 
                             rabbitTemplate.convertAndSend("outbox", message);
                         } finally {
